@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>三千大战嘿哈</title>
+    <title>猫狗抢食大战 - 纯净单文件版</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -47,6 +47,26 @@
         #game-wrapper {
             transform-origin: center center;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 旋转提示 */
+        #rotation-tip {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #FDFCF0;
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        @media screen and (orientation: portrait) and (max-width: 768px) {
+            #rotation-tip {
+                display: flex;
+            }
         }
 
         /* 摇杆样式 */
@@ -100,7 +120,14 @@
         }
     </style>
 </head>
-<body class="bg-[#FDFCF0] text-[#4A4A4A] min-h-screen flex flex-col items-center justify-center p-2 sm:p-4">
+<body class="bg-[#FDFCF0] text-[#4A4A4A] min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+
+    <div id="rotation-tip">
+        <div class="text-6xl mb-4 animate-bounce">📱🔄</div>
+        <h2 class="text-2xl font-black mb-2">建议旋转项目设备</h2>
+        <p class="text-gray-500">横屏玩耍体验更佳哦！</p>
+        <button onclick="this.parentElement.style.display='none'" class="mt-8 text-xs font-bold uppercase tracking-widest opacity-40">强制继续</button>
+    </div>
 
     <div id="game-wrapper" class="flex flex-col items-center">
         <!-- 顶部信息栏 -->
@@ -128,7 +155,7 @@
             <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: url('https://www.transparenttextures.com/patterns/natural-paper.png');"></div>
 
             <!-- 静态装饰物 -->
-            <div class="absolute top-4 left-1/2 -translate-x-1/2 opacity-20 text-xs font-bold uppercase tracking-[0.5em] pointer-events-none">三千大战嘿哈</div>
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 opacity-20 text-xs font-bold uppercase tracking-[0.5em] pointer-events-none">Pet Battle Arena</div>
             <div class="absolute top-10 left-10 text-4xl opacity-20 rotate-12 pointer-events-none">🛋️</div>
             <div class="absolute bottom-10 left-10 text-4xl opacity-20 rotate-45 pointer-events-none">🧶</div>
             <div class="absolute bottom-10 right-28 text-4xl opacity-20 -rotate-12 pointer-events-none">📚</div>
@@ -165,9 +192,16 @@
                     <button onclick="startGame()" class="bg-[#2D2D2D] text-white font-black py-4 sm:py-6 px-10 sm:px-16 rounded-[2rem] text-2xl sm:text-3xl hover:scale-105 active:scale-95 transition-all shadow-xl">
                         立即开抢
                     </button>
-                    <div class="space-y-1">
-                        <p class="text-xs opacity-60 font-bold uppercase tracking-widest text-gray-400">电脑：方向键 或 WASD 移动 / 点击拖动右下角摇杆</p>
-                        <p class="text-xs opacity-60 font-bold uppercase tracking-widest text-gray-400">手机：右侧虚拟摇杆移动</p>
+
+                    <div class="flex flex-col gap-4 items-center">
+                        <button onclick="toggleFullscreen()" class="flex items-center gap-2 text-sm font-bold opacity-60 hover:opacity-100 transition-opacity">
+                            <i data-lucide="maximize" class="w-4 h-4"></i> 进入全屏模式 (推荐)
+                        </button>
+
+                        <div class="space-y-1">
+                            <p class="text-xs opacity-40 font-bold uppercase tracking-widest text-gray-400">电脑：方向键 或 WASD / 点击拖动摇杆</p>
+                            <p class="text-xs opacity-40 font-bold uppercase tracking-widest text-gray-400">手机：右侧虚拟摇杆移动 (横屏最佳)</p>
+                        </div>
                     </div>
                 </div>
 
@@ -232,30 +266,50 @@
         // 响应式缩放
         function handleResize() {
             const wrapper = document.getElementById('game-wrapper');
-            const availableWidth = window.innerWidth * 0.95;
-            const availableHeight = window.innerHeight * 0.85;
+            const availableWidth = window.innerWidth * 0.98;
+            const availableHeight = window.innerHeight * 0.92;
             const scale = Math.min(availableWidth / 800, availableHeight / 600);
-            wrapper.style.transform = `scale(${scale > 1.2 ? 1.2 : scale})`;
+            // 手机端允许稍微超出一一点点以填满屏幕
+            const maxScale = window.innerWidth < 768 ? 1.5 : 1.2;
+            wrapper.style.transform = `scale(${scale > maxScale ? maxScale : scale})`;
         }
         window.addEventListener('resize', handleResize);
         handleResize();
 
-        // 摇杆逻辑 (统一触摸和鼠标)
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable full-screen mode: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // 摇杆逻辑 (优化激活区域)
         const joyBase = document.getElementById('joystick-base');
         const joyStick = document.getElementById('joystick-stick');
         const gameContainer = document.getElementById('game-container');
 
-        function onJoyStart(clientX, clientY) {
+        function onJoyStart(clientX, clientY, isMouse = false) {
             const rect = gameContainer.getBoundingClientRect();
-            const x = (clientX - rect.left) / (rect.width / config.width);
+            // 物理像素坐标转换为游戏逻辑坐标
+            const relX = (clientX - rect.left) / (rect.width / config.width);
 
-            // 只有右下角区域可以触发摇杆激活，或者直接点击摇杆底座
-            if (x > config.width / 2) {
-                state.joystick.isActive = true;
+            // 鼠标必须点在摇杆区域，触摸可以在右半边划动
+            if (isMouse) {
                 const baseRect = joyBase.getBoundingClientRect();
-                state.joystick.startX = baseRect.left + baseRect.width / 2;
-                state.joystick.startY = baseRect.top + baseRect.height / 2;
+                const dx = clientX - (baseRect.left + baseRect.width / 2);
+                const dy = clientY - (baseRect.top + baseRect.height / 2);
+                if (Math.sqrt(dx * dx + dy * dy) > 100) return; // 鼠标点击太远不触发
+            } else if (relX < config.width / 2) {
+                return; // 触摸左半边不触发摇杆
             }
+
+            state.joystick.isActive = true;
+            const baseRect = joyBase.getBoundingClientRect();
+            state.joystick.startX = baseRect.left + baseRect.width / 2;
+            state.joystick.startY = baseRect.top + baseRect.height / 2;
         }
 
         function onJoyMove(clientX, clientY) {
@@ -292,8 +346,7 @@
 
         // 绑定鼠标事件 (电脑端)
         joyBase.addEventListener('mousedown', e => {
-            onJoyStart(e.clientX, e.clientY);
-            // 阻止文本选择
+            onJoyStart(e.clientX, e.clientY, true);
             e.preventDefault();
         });
         window.addEventListener('mousemove', e => {
