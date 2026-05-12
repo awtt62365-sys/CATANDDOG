@@ -1,0 +1,486 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三千大战嘿哈</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            cursor: default;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .game-window {
+            cursor: none;
+        }
+
+        @keyframes ping-slow {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+
+        .shield-effect {
+            animation: ping-slow 2s infinite;
+        }
+
+        /* 响应式画布缩放 */
+        #game-wrapper {
+            transform-origin: center center;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 摇杆样式 */
+        .joystick-base {
+            width: 120px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.05);
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            z-index: 100;
+            display: block; /* 始终显示 */
+            backdrop-filter: blur(2px);
+            transition: opacity 0.3s;
+        }
+
+        .joystick-stick {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        @media (pointer: fine) {
+            .joystick-base {
+                opacity: 0.4;
+            }
+
+                .joystick-base:hover {
+                    opacity: 0.8;
+                }
+        }
+
+        /* 室内背景增加层次感 */
+        .living-room-floor {
+            background-color: #fceec7;
+            background-image: linear-gradient(rgba(139,69,19,0.03) 2px, transparent 2px), linear-gradient(90deg, rgba(139,69,19,0.03) 2px, transparent 2px);
+            background-size: 50px 50px;
+        }
+
+        .wall-shadow {
+            box-shadow: inset 0 20px 60px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-[#FDFCF0] text-[#4A4A4A] min-h-screen flex flex-col items-center justify-center p-2 sm:p-4">
+
+    <div id="game-wrapper" class="flex flex-col items-center">
+        <!-- 顶部信息栏 -->
+        <div class="w-full max-w-[800px] flex justify-between items-center mb-4 sm:mb-6 px-4">
+            <div>
+                <div class="flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wider opacity-60">
+                    <i data-lucide="trophy" class="w-3 h-3 sm:w-4 h-4"></i> 最高分: <span id="high-score">0</span>
+                </div>
+                <div id="current-score" class="text-3xl sm:text-5xl font-black text-[#2D2D2D]">0</div>
+            </div>
+            <div class="text-right">
+                <div class="flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wider opacity-60 justify-end">
+                    <i data-lucide="timer" class="w-3 h-3 sm:w-4 h-4"></i> 剩余时间
+                </div>
+                <div id="timer" class="text-3xl sm:text-5xl font-mono font-medium text-[#2D2D2D]">60s</div>
+            </div>
+        </div>
+
+        <!-- 游戏画布 -->
+        <div id="game-container" class="relative bg-white rounded-[32px] sm:rounded-[40px] shadow-2xl border-4 sm:border-8 border-white overflow-hidden w-[800px] h-[600px] touch-none">
+            <!-- 背景层：地板图案 -->
+            <div class="absolute inset-0 living-room-floor wall-shadow pointer-events-none"></div>
+            <!-- 地毯装饰 (更大、更柔和) -->
+            <div class="absolute w-[500px] h-[350px] bg-orange-200/20 rounded-[120px] -rotate-6 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-orange-300/10 blur-[1px] pointer-events-none"></div>
+            <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: url('https://www.transparenttextures.com/patterns/natural-paper.png');"></div>
+
+            <!-- 静态装饰物 -->
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 opacity-20 text-xs font-bold uppercase tracking-[0.5em] pointer-events-none">三千大战嘿哈</div>
+            <div class="absolute top-10 left-10 text-4xl opacity-20 rotate-12 pointer-events-none">🛋️</div>
+            <div class="absolute bottom-10 left-10 text-4xl opacity-20 rotate-45 pointer-events-none">🧶</div>
+            <div class="absolute bottom-10 right-28 text-4xl opacity-20 -rotate-12 pointer-events-none">📚</div>
+
+            <!-- 实体挂载点 -->
+            <div id="foods-layer"></div>
+            <div id="dog" class="absolute z-10 transition-all duration-100 ease-linear" style="width: 80px; height: 80px;">
+                <img src="/input_file_0.png" class="w-full h-full object-contain drop-shadow-xl" onerror="this.src='dog.png'">
+            </div>
+            <div id="cat" class="absolute z-20 transition-all duration-100 ease-linear" style="width: 80px; height: 80px;">
+                <div id="cat-shield" class="absolute -inset-4 border-4 border-blue-400 rounded-full hidden shield-effect"></div>
+                <img src="/input_file_1.png" class="w-full h-full object-contain drop-shadow-2xl" onerror="this.src='cat.png'">
+            </div>
+
+            <!-- 遮罩界面 -->
+            <div id="overlay" class="absolute inset-0 flex items-center justify-center bg-white/95 backdrop-blur-md z-50 p-6 sm:p-12 text-center">
+                <div id="start-screen" class="space-y-6 sm:space-y-8">
+                    <h1 class="text-4xl sm:text-6xl font-black text-[#2D2D2D]">抢食大战! 🐾</h1>
+                    <p class="text-lg sm:text-xl text-[#666]">操控蓝猫，抢在比熊前面吃掉食物！</p>
+                    <div class="grid grid-cols-3 gap-2 sm:gap-4 pb-4">
+                        <div class="p-3 sm:p-4 bg-gray-50 rounded-2xl sm:rounded-3xl border border-blue-100">
+                            <div class="text-3xl sm:text-4xl">🐟</div>
+                            <div class="font-bold text-blue-500">+10</div>
+                        </div>
+                        <div class="p-3 sm:p-4 bg-gray-50 rounded-2xl sm:rounded-3xl border border-red-100">
+                            <div class="text-3xl sm:text-4xl">🍖</div>
+                            <div class="font-bold text-red-500">-20</div>
+                        </div>
+                        <div class="p-3 sm:p-4 bg-gray-50 rounded-2xl sm:rounded-3xl border border-yellow-100">
+                            <div class="text-3xl sm:text-4xl">🥫</div>
+                            <div class="font-bold text-yellow-500">+50</div>
+                        </div>
+                    </div>
+                    <button onclick="startGame()" class="bg-[#2D2D2D] text-white font-black py-4 sm:py-6 px-10 sm:px-16 rounded-[2rem] text-2xl sm:text-3xl hover:scale-105 active:scale-95 transition-all shadow-xl">
+                        立即开抢
+                    </button>
+                    <div class="space-y-1">
+                        <p class="text-xs opacity-60 font-bold uppercase tracking-widest text-gray-400">电脑：方向键 或 WASD 移动 / 点击拖动右下角摇杆</p>
+                        <p class="text-xs opacity-60 font-bold uppercase tracking-widest text-gray-400">手机：右侧虚拟摇杆移动</p>
+                    </div>
+                </div>
+
+                <div id="end-screen" class="space-y-6 sm:space-y-8 hidden">
+                    <h1 class="text-4xl sm:text-6xl font-black text-[#2D2D2D]">时间到!</h1>
+                    <div class="text-2xl sm:text-3xl font-bold bg-gray-100 px-8 py-4 rounded-full inline-block">
+                        得分: <span id="final-score">0</span>
+                    </div>
+                    <br>
+                    <button onclick="startGame()" class="bg-[#2D2D2D] text-white font-black py-4 sm:py-6 px-10 sm:px-16 rounded-[2rem] text-2xl sm:text-3xl hover:scale-105 active:scale-95 transition-all shadow-xl">
+                        再来一局
+                    </button>
+                </div>
+            </div>
+
+            <!-- 摇杆视图 -->
+            <div id="joystick-base" class="joystick-base">
+                <div id="joystick-stick" class="joystick-stick"></div>
+            </div>
+
+            <!-- 提示栏 -->
+            <div id="buff-bar" class="absolute bottom-6 left-6 flex flex-col sm:flex-row gap-3 z-30 pointer-events-none"></div>
+        </div>
+    </div>
+
+    <div class="mt-4 sm:mt-8 text-center opacity-30">
+        <p class="text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em]">British Shorthair vs Bichon Frise</p>
+    </div>
+
+    <!-- 游戏脚本 -->
+    <script>
+        lucide.createIcons();
+
+        const config = {
+            width: 800,
+            height: 600,
+            catSize: 80,
+            dogSize: 80,
+            foodSize: 40,
+            initialTime: 60
+        };
+
+        let state = {
+            score: 0,
+            highScore: localStorage.getItem('pet_game_hs') || 0,
+            timeLeft: config.initialTime,
+            isPlaying: false,
+            cat: { x: 100, y: 100 },
+            dog: { x: 600, y: 400 },
+            foods: [],
+            buffs: { speed: 0, shield: false, stun: 0 },
+            shieldCount: 0,
+            joystick: { isActive: false, x: 0, y: 0, startX: 0, startY: 0 }
+        };
+
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+        });
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+        // 响应式缩放
+        function handleResize() {
+            const wrapper = document.getElementById('game-wrapper');
+            const availableWidth = window.innerWidth * 0.95;
+            const availableHeight = window.innerHeight * 0.85;
+            const scale = Math.min(availableWidth / 800, availableHeight / 600);
+            wrapper.style.transform = `scale(${scale > 1.2 ? 1.2 : scale})`;
+        }
+        window.addEventListener('resize', handleResize);
+        handleResize();
+
+        // 摇杆逻辑 (统一触摸和鼠标)
+        const joyBase = document.getElementById('joystick-base');
+        const joyStick = document.getElementById('joystick-stick');
+        const gameContainer = document.getElementById('game-container');
+
+        function onJoyStart(clientX, clientY) {
+            const rect = gameContainer.getBoundingClientRect();
+            const x = (clientX - rect.left) / (rect.width / config.width);
+
+            // 只有右下角区域可以触发摇杆激活，或者直接点击摇杆底座
+            if (x > config.width / 2) {
+                state.joystick.isActive = true;
+                const baseRect = joyBase.getBoundingClientRect();
+                state.joystick.startX = baseRect.left + baseRect.width / 2;
+                state.joystick.startY = baseRect.top + baseRect.height / 2;
+            }
+        }
+
+        function onJoyMove(clientX, clientY) {
+            if (!state.joystick.isActive) return;
+            const dx = clientX - state.joystick.startX;
+            const dy = clientY - state.joystick.startY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = 50;
+
+            const angle = Math.atan2(dy, dx);
+            const moveX = Math.min(dist, maxDist) * Math.cos(angle);
+            const moveY = Math.min(dist, maxDist) * Math.sin(angle);
+
+            joyStick.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+            state.joystick.x = moveX / maxDist;
+            state.joystick.y = moveY / maxDist;
+        }
+
+        function onJoyEnd() {
+            state.joystick.isActive = false;
+            joyStick.style.transform = 'translate(-50%, -50%)';
+            state.joystick.x = 0;
+            state.joystick.y = 0;
+        }
+
+        // 绑定触摸事件
+        gameContainer.addEventListener('touchstart', e => {
+            onJoyStart(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+        window.addEventListener('touchmove', e => {
+            onJoyMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+        window.addEventListener('touchend', onJoyEnd);
+
+        // 绑定鼠标事件 (电脑端)
+        joyBase.addEventListener('mousedown', e => {
+            onJoyStart(e.clientX, e.clientY);
+            // 阻止文本选择
+            e.preventDefault();
+        });
+        window.addEventListener('mousemove', e => {
+            onJoyMove(e.clientX, e.clientY);
+        });
+        window.addEventListener('mouseup', onJoyEnd);
+
+        document.getElementById('high-score').innerText = state.highScore;
+
+        function spawnFood() {
+            const types = [
+                { type: 'CAT', icon: '🐟', pts: 10 },
+                { type: 'CAT', icon: '🐟', pts: 10 },
+                { type: 'DOG', icon: '🍖', pts: -20 },
+                { type: 'DOG', icon: '🍖', pts: -20 },
+                { type: 'DELUXE', icon: '罐头', pts: 50, rawIcon: '🥫' }
+            ];
+            const t = types[Math.floor(Math.random() * types.length)];
+            return {
+                id: Math.random().toString(36).substr(2, 9),
+                x: Math.random() * (config.width - config.foodSize),
+                y: Math.random() * (config.height - config.foodSize),
+                ...t
+            };
+        }
+
+        function startGame() {
+            state.score = 0;
+            state.timeLeft = config.initialTime;
+            state.cat = { x: 100, y: 100 };
+            state.dog = { x: 600, y: 400 };
+            state.foods = Array.from({ length: 7 }, spawnFood);
+            state.isPlaying = true;
+            state.buffs = { speed: 0, shield: false, stun: 0 };
+            state.shieldCount = 0;
+
+            document.getElementById('overlay').classList.add('hidden');
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('end-screen').classList.add('hidden');
+
+            // 确保摇杆即使在电脑端也可见（如果不想要预览，可以改为始终显示）
+            joyBase.style.display = 'block';
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        let lastTime = 0;
+        function gameLoop(time) {
+            if (!state.isPlaying) return;
+            const dt = lastTime ? (time - lastTime) / 1000 : 0.016;
+            lastTime = time;
+
+            update(dt);
+            render();
+
+            if (state.timeLeft > 0) {
+                requestAnimationFrame(gameLoop);
+            } else {
+                gameOver();
+            }
+        }
+
+        function update(dt) {
+            state.timeLeft -= dt;
+            state.buffs.speed = Math.max(0, state.buffs.speed - dt);
+            state.buffs.stun = Math.max(0, state.buffs.stun - dt);
+
+            // 蓝猫移动
+            if (state.buffs.stun <= 0) {
+                const baseSpeed = state.buffs.speed > 0 ? 450 : 300;
+                let dx = 0;
+                let dy = 0;
+
+                // 键盘输入优先
+                if (keys['arrowup'] || keys['w']) dy -= 1;
+                if (keys['arrowdown'] || keys['s']) dy += 1;
+                if (keys['arrowleft'] || keys['a']) dx -= 1;
+                if (keys['arrowright'] || keys['d']) dx += 1;
+
+                // 摇杆输入合并 (如果没有键盘按键，则使用摇杆)
+                if (dx === 0 && dy === 0 && state.joystick.isActive) {
+                    dx = state.joystick.x;
+                    dy = state.joystick.y;
+                }
+
+                if (dx !== 0 || dy !== 0) {
+                    const mag = Math.sqrt(dx * dx + dy * dy);
+                    const finalSpeed = baseSpeed * dt;
+                    state.cat.x += (dx / mag) * finalSpeed;
+                    state.cat.y += (dy / mag) * finalSpeed;
+                }
+
+                state.cat.x = Math.max(0, Math.min(config.width - config.catSize, state.cat.x));
+                state.cat.y = Math.max(0, Math.min(config.height - config.catSize, state.cat.y));
+            }
+
+            // 比熊 AI
+            if (state.foods.length > 0) {
+                const head = state.foods[0];
+                const dX = head.x - state.dog.x;
+                const dY = head.y - state.dog.y;
+                const angle = Math.atan2(dY, dX);
+                const dogSpeed = (220 + (config.initialTime - state.timeLeft) * 2) * dt;
+                state.dog.x += Math.cos(angle) * dogSpeed;
+                state.dog.y += Math.sin(angle) * dogSpeed;
+            }
+
+            // 碰撞检测
+            const catRect = { x: state.cat.x, y: state.cat.y, w: config.catSize, h: config.catSize };
+            const dogRect = { x: state.dog.x, y: state.dog.y, w: config.dogSize, h: config.dogSize };
+
+            state.foods = state.foods.filter(f => {
+                const fRect = { x: f.x, y: f.y, w: config.foodSize, h: config.foodSize };
+
+                if (intersect(catRect, fRect)) {
+                    if (f.type === 'DOG') {
+                        if (state.buffs.shield) {
+                            state.buffs.shield = false;
+                        } else {
+                            state.score = Math.max(0, state.score + f.pts);
+                            state.buffs.stun = 0.8;
+                        }
+                    } else {
+                        state.score += f.pts;
+                        if (f.type === 'DELUXE') state.buffs.speed = 4;
+                        if (f.type === 'CAT') {
+                            state.shieldCount++;
+                            if (state.shieldCount >= 3) {
+                                state.buffs.shield = true;
+                                state.shieldCount = 0;
+                            }
+                        }
+                    }
+                    return false;
+                }
+                if (intersect(dogRect, fRect)) return false;
+                return true;
+            });
+
+            while (state.foods.length < 7) state.foods.push(spawnFood());
+        }
+
+        function intersect(r1, r2) {
+            return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+        }
+
+        function render() {
+            document.getElementById('current-score').innerText = Math.floor(state.score);
+            document.getElementById('timer').innerText = Math.ceil(state.timeLeft) + 's';
+            if (state.timeLeft < 10) document.getElementById('timer').classList.add('text-red-500', 'animate-pulse');
+            else document.getElementById('timer').classList.remove('text-red-500', 'animate-pulse');
+
+            const catEl = document.getElementById('cat');
+            catEl.style.transform = `translate(${state.cat.x}px, ${state.cat.y}px) rotate(${state.buffs.stun > 0 ? '15deg' : '0deg'}) scale(${state.buffs.speed > 0 ? 1.2 : 1})`;
+            catEl.style.opacity = state.buffs.stun > 0 ? 0.5 : 1;
+            document.getElementById('cat-shield').style.display = state.buffs.shield ? 'block' : 'none';
+
+            const dogEl = document.getElementById('dog');
+            dogEl.style.transform = `translate(${state.dog.x}px, ${state.dog.y}px)`;
+
+            const foodLayer = document.getElementById('foods-layer');
+            const foodHTML = state.foods.map(f => `
+                    <div class="absolute text-4xl animate-bounce" style="left: ${f.x}px; top: ${f.y}px; width: 40px; height: 40px;">${f.rawIcon || f.icon}</div>
+                `).join('');
+            if (foodLayer.innerHTML !== foodHTML) foodLayer.innerHTML = foodHTML;
+
+            // Buffs
+            const buffBar = document.getElementById('buff-bar');
+            let buffHTML = '';
+            if (state.buffs.speed > 0) buffHTML += `<div class="bg-yellow-400 text-white px-4 py-2 rounded-xl font-bold shadow-lg text-sm">⚡ 加速中 ${Math.ceil(state.buffs.speed)}s</div>`;
+            if (state.buffs.shield) buffHTML += `<div class="bg-blue-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg text-sm">🛡️ 护盾激活</div>`;
+            if (!state.buffs.shield && state.shieldCount > 0) buffHTML += `<div class="bg-white/80 border border-gray-200 text-gray-600 px-4 py-2 rounded-xl font-bold shadow-sm text-sm">连吃任务: ${state.shieldCount}/3</div>`;
+            buffBar.innerHTML = buffHTML;
+        }
+
+        function gameOver() {
+            state.isPlaying = false;
+            document.getElementById('overlay').classList.remove('hidden');
+            document.getElementById('end-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = Math.floor(state.score);
+
+            if (state.score > state.highScore) {
+                state.highScore = Math.floor(state.score);
+                localStorage.setItem('pet_game_hs', state.highScore);
+                document.getElementById('high-score').innerText = state.highScore;
+            }
+        }
+    </script>
+</body>
+</html>
